@@ -1,7 +1,9 @@
+
 import React, { useState, useCallback, useRef } from 'react';
 import type { AppFile } from './types';
 import { suggestFileName } from './services/geminiService';
 import FileThumbnail from './components/FileThumbnail';
+import InstructionsModal from './components/InstructionsModal';
 import { UploadIcon, SparklesIcon, DownloadIcon, SpinnerIcon } from './components/Icons';
 
 // This is required because we are loading JSZip from a CDN.
@@ -19,6 +21,7 @@ const App: React.FC = () => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<false | 'optimizing' | 'zipping'>(false);
     const [error, setError] = useState<string | null>(null);
+    const [isInstructionsVisible, setIsInstructionsVisible] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,6 +225,9 @@ const App: React.FC = () => {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            
+            setIsInstructionsVisible(true);
+
         } catch (err) {
             console.error("Ошибка при создании ZIP-файла:", err);
             setError("Не удалось создать ZIP-файл. Пожалуйста, попробуйте снова.");
@@ -314,6 +320,11 @@ const App: React.FC = () => {
                     className="hidden"
                 />
             </main>
+            
+            <InstructionsModal 
+              isOpen={isInstructionsVisible} 
+              onClose={() => setIsInstructionsVisible(false)} 
+            />
         </div>
     );
 };
