@@ -53,6 +53,10 @@ const App: React.FC = () => {
     const [config, setConfig] = useState<Record<string, any> | null>(null);
     const [configString, setConfigString] = useState('');
     const [configError, setConfigError] = useState<string | null>(null);
+    
+    const [highlightedItems, setHighlightedItems] = useState<Record<string, boolean>>({});
+    const [configHighlighted, setConfigHighlighted] = useState(false);
+
 
     // Creates a preview-ready object URL by templating and inlining assets
     const createPreviewableObjectUrl = useCallback((
@@ -62,6 +66,7 @@ const App: React.FC = () => {
     ): string => {
         const templatedHtml = processHtmlWithConfig(originalHtml, currentConfig);
         const doc = new DOMParser().parseFromString(templatedHtml, 'text/html');
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
 
         // Inline CSS
         doc.querySelectorAll('link[rel="stylesheet"][href]').forEach(link => {
@@ -87,6 +92,20 @@ const App: React.FC = () => {
                 }
             }
         });
+        
+        // Inline Scripts
+        doc.querySelectorAll('script[src]').forEach(script => {
+            const src = script.getAttribute('src')!;
+            const fileName = src.split('/').pop()!;
+            if (!src.startsWith('http') && allFilesMap.has(fileName)) {
+                const jsFile = allFilesMap.get(fileName)!;
+                const newScript = doc.createElement('script');
+                newScript.textContent = jsFile.content as string;
+                script.removeAttribute('src'); // remove src to prevent external request
+                script.replaceWith(newScript);
+            }
+        });
+
 
         const finalHtmlForPreview = doc.documentElement.outerHTML;
         return URL.createObjectURL(new Blob([finalHtmlForPreview], { type: 'text/html' }));
@@ -95,6 +114,9 @@ const App: React.FC = () => {
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const uploadedFiles = event.target.files;
         if (!uploadedFiles) return;
+
+        // Clean up previous file URLs to prevent memory leaks
+        files.forEach(file => URL.revokeObjectURL(file.objectURL));
 
         setError(null);
         setFiles([]);
@@ -213,6 +235,10 @@ const App: React.FC = () => {
                 newMap.set('_config.json', newConfigFile);
                 return newMap;
             });
+            
+            // Highlight for user feedback
+            setConfigHighlighted(true);
+            setTimeout(() => setConfigHighlighted(false), 1500);
     
         } catch (e) {
             console.error("Failed to generate or parse config:", e);
@@ -264,6 +290,12 @@ const App: React.FC = () => {
                     return update ? { ...file, newName: update.newName } : file;
                 })
             );
+            
+            // Highlight for user feedback
+            const highlights = newNames.reduce((acc, n) => ({...acc, [n.id]: true }), {});
+            setHighlightedItems(highlights);
+            setTimeout(() => setHighlightedItems({}), 1500);
+
         } catch (err) {
             setError("Произошла ошибка при оптимизации имен файлов.");
         } finally {
@@ -400,6 +432,7 @@ const App: React.FC = () => {
                                         key={file.id}
                                         file={file}
                                         isSelected={selectedId === file.id}
+                                        isHighlighted={!!highlightedItems[file.id]}
                                         onSelect={setSelectedId}
                                         onSetIndex={handleSetIndex}
                                         onNameChange={handleNameChange}
@@ -436,7 +469,7 @@ const App: React.FC = () => {
                                 <textarea
                                     value={configString}
                                     onChange={(e) => handleConfigChange(e.target.value)}
-                                    className={`w-full h-48 p-4 font-mono text-sm bg-slate-900 border rounded-md focus:ring-accent-blue focus:border-accent-blue transition-colors ${configError ? 'border-red-500' : 'border-dark-border'}`}
+                                    className={`w-full h-48 p-4 font-mono text-sm bg-slate-900 border rounded-md focus:ring-accent-blue focus:border-accent-blue transition-all duration-300 ${configError ? 'border-red-500' : 'border-dark-border'} ${configHighlighted ? 'border-green-500 ring-2 ring-green-500/50' : ''}`}
                                     spellCheck="false"
                                 />
                                 {configError && <p className="mt-2 text-sm text-red-400">{configError}</p>}

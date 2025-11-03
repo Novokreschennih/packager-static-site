@@ -5,12 +5,13 @@ import { StarIcon } from './Icons';
 interface FileThumbnailProps {
   file: AppFile;
   isSelected: boolean;
+  isHighlighted: boolean;
   onSelect: (id: string) => void;
   onSetIndex: (id: string) => void;
   onNameChange: (id: string, newName: string) => void;
 }
 
-const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, onSelect, onSetIndex, onNameChange }) => {
+const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, isHighlighted, onSelect, onSetIndex, onNameChange }) => {
   const handleSetIndexClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onSetIndex(file.id);
@@ -22,7 +23,7 @@ const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, onSelec
         onClick={() => onSelect(file.id)}
         className={`relative group rounded-lg overflow-hidden border-4 transition-all duration-300 cursor-pointer ${
           isSelected ? 'border-accent-blue shadow-2xl' : 'border-dark-panel hover:border-dark-border'
-        }`}
+        } ${isHighlighted ? 'shadow-lg shadow-green-500/50' : ''}`}
       >
         {file.isIndex && (
           <div className="absolute top-2 right-2 bg-yellow-500 text-white p-2 rounded-full z-10 shadow-lg">
@@ -60,7 +61,7 @@ const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, onSelec
           value={file.newName}
           onChange={(e) => onNameChange(file.id, e.target.value)}
           disabled={file.isIndex}
-          className="bg-dark-panel border border-dark-border text-dark-text-primary text-sm rounded-md focus:ring-accent-blue focus:border-accent-blue block w-full p-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`bg-dark-panel border text-dark-text-primary text-sm rounded-md focus:ring-accent-blue focus:border-accent-blue block w-full p-2.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ${isHighlighted ? 'border-green-500 ring-2 ring-green-500/50' : 'border-dark-border'}`}
           placeholder="Новое имя файла"
         />
       </div>

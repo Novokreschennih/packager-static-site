@@ -26,7 +26,11 @@ ${htmlContent.substring(0, 4000)}
             contents: prompt,
         });
 
-        const suggestedName = response.text.trim().toLowerCase().replace(/\s+/g, '-');
+        // Use regex to extract a valid filename to be more robust against chatty responses
+        const textResponse = response.text.trim();
+        const match = textResponse.match(/([\w-]+\.html)/);
+        const suggestedName = match ? match[0] : textResponse.toLowerCase().replace(/\s+/g, '-');
+
 
         // Basic validation
         if (suggestedName.endsWith('.html') && suggestedName.length > 5 && !suggestedName.includes('`')) {
@@ -53,7 +57,7 @@ export const generateConfigFromHtml = async (htmlContent: string): Promise<strin
 - Ключи должны быть семантическими, на английском языке, в нижнем регистре, и использовать snake_case (например, 'social_links', 'analytics_id').
 - Сгруппируй связанные ключи во вложенные объекты (например, 'social_links': { 'telegram': '...' }).
 - Значения для этих ключей должны быть информативными плейсхолдерами на русском языке, которые объясняют, что нужно ввести (например, "укажите ссылку на ваш Telegram-канал", "вставьте ваш ID Google Analytics"). НЕ используй пустые строки "".
-- Ответ ДОЛЖЕН быть только валидным JSON-объектом без какого-либо дополнительного текста, объяснений или markdown-оберток (\`\`\`json ... \`\`\`).
+- Ответ ДОЛЖЕН быть только валидным JSON-объектом без какого-либо дополнительного текста, объяснений или markdown-оберток.
 
 HTML-содержимое:
 \`\`\`html
@@ -65,24 +69,14 @@ ${htmlContent.substring(0, 10000)}
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                temperature: 0.1, // Lower temperature for more deterministic JSON output
+                temperature: 0.1,
+                responseMimeType: "application/json",
             },
         });
 
-        let jsonString = response.text.trim();
+        const jsonString = response.text.trim();
 
-        // Clean up markdown backticks just in case
-        if (jsonString.startsWith('```json')) {
-            jsonString = jsonString.substring(7);
-        }
-        if (jsonString.startsWith('```')) {
-            jsonString = jsonString.substring(3);
-        }
-        if (jsonString.endsWith('```')) {
-            jsonString = jsonString.slice(0, -3);
-        }
-
-        // Basic validation that will throw an error if the string is not valid JSON
+        // The model is now forced to return JSON, so we just need to parse it.
         JSON.parse(jsonString);
 
         return jsonString;
