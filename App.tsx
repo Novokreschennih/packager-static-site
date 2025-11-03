@@ -355,30 +355,65 @@ const App: React.FC = () => {
             setError("Пожалуйста, выберите главную страницу (index.html) перед подготовкой ZIP-файла.");
             return;
         }
-
+    
         setIsLoading('zipping');
         setError(null);
-
+    
         try {
             const zip = new JSZip();
+            // This map has originalName -> newName for the HTML files displayed in the UI.
             const nameMap = new Map(files.map(f => [f.originalName, f.newName]));
             
+            // This map will store which original filename corresponds to which new filename, for ALL files.
+            const finalNameMap = new Map<string, string>();
             allUploadedFiles.forEach(file => {
-                if (file.name === '_config.json') return; // Do not include config file in final zip
-
-                const newName = nameMap.get(file.name) ?? file.name;
-                
-                let finalContent = file.content;
-                // Process HTML files with config before zipping
-                if (file.type === 'text/html') {
-                    finalContent = processHtmlWithConfig(file.content as string, config);
-                }
-
-                zip.file(newName, finalContent);
+                const newName = nameMap.get(file.name); // Check if it's a renamed HTML file
+                finalNameMap.set(file.name, newName ?? file.name);
             });
-
+    
+            for (const file of allUploadedFiles.values()) {
+                if (file.name === '_config.json') continue;
+    
+                const finalFileName = finalNameMap.get(file.name)!;
+                let finalContent = file.content;
+    
+                // For HTML files, process config and rewrite relative asset paths
+                if (file.type === 'text/html') {
+                    const templatedHtml = processHtmlWithConfig(file.content as string, config);
+                    const doc = new DOMParser().parseFromString(templatedHtml, 'text/html');
+    
+                    const attributes = ['href', 'src'];
+                    doc.querySelectorAll(attributes.map(attr => `[${attr}]`).join(', ')).forEach(el => {
+                        const attrName = attributes.find(attr => el.hasAttribute(attr))!;
+                        const originalAssetPath = el.getAttribute(attrName)!;
+    
+                        // Skip absolute URLs, data URIs, anchor links etc.
+                        if (originalAssetPath.startsWith('http') || originalAssetPath.startsWith('data:') || originalAssetPath.startsWith('#') || originalAssetPath.startsWith('//') || originalAssetPath === '') {
+                            return;
+                        }
+    
+                        // Extract the filename from the path, e.g., 'css/style.css' -> 'style.css'
+                        const assetFilename = originalAssetPath.split('/').pop()!;
+                        
+                        // Check if a file with this name was uploaded
+                        if (allUploadedFiles.has(assetFilename)) {
+                            // Get the final (potentially renamed) name of this asset
+                            const finalAssetName = finalNameMap.get(assetFilename) ?? assetFilename;
+                            el.setAttribute(attrName, `./${finalAssetName}`); // Use ./ to ensure it's relative
+                        } else {
+                            console.warn(`[ZIP] Asset "${originalAssetPath}" не найден в загруженных файлах. Путь не был изменен.`);
+                        }
+                    });
+                    finalContent = doc.documentElement.outerHTML;
+                }
+                
+                zip.file(finalFileName, finalContent);
+            }
+    
             zip.file("README.md", generateReadmeContent());
-
+            // Add vercel.json to guide Vercel's deployment process
+            zip.file("vercel.json", JSON.stringify({ "framework": null }, null, 2));
+    
             const blob = await zip.generateAsync({ type: "blob" });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
@@ -388,7 +423,7 @@ const App: React.FC = () => {
             document.body.removeChild(link);
             
             setIsInstructionsVisible(true);
-
+    
         } catch (err) {
             console.error("Ошибка при создании ZIP-файла:", err);
             setError("Не удалось создать ZIP-файл. Пожалуйста, попробуйте снова.");

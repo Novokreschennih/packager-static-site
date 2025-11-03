@@ -46,7 +46,7 @@ const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, onClose }
         </button>
 
         <h2 className="text-2xl md:text-3xl font-bold text-dark-text-primary mb-4">Ваш сайт готов к развертыванию!</h2>
-        <p className="text-dark-text-secondary mb-6">Следуйте этим простым шагам, чтобы опубликовать ваш сайт с помощью GitHub Pages.</p>
+        <p className="text-dark-text-secondary mb-6">Следуйте этим шагам, чтобы опубликовать ваш сайт бесплатно. GitHub Pages - отличный выбор.</p>
 
         <div className="space-y-6 text-dark-text-primary">
           {/* Step 1 */}
@@ -98,6 +98,21 @@ const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, onClose }
             </p>
           </div>
         </div>
+        
+        <div className="mt-8 pt-6 border-t border-dark-border">
+            <h3 className="text-lg font-semibold mb-2 text-center">Альтернатива: Развертывание на Vercel</h3>
+            <p className="text-sm text-center text-dark-text-secondary mb-4">
+                Vercel - еще одна отличная платформа для хостинга статичных сайтов. Процесс очень похож:
+            </p>
+            <ol className="list-decimal list-inside text-sm text-dark-text-secondary space-y-2 max-w-lg mx-auto text-left">
+                <li>Загрузите распакованные файлы в новый репозиторий GitHub (как в шагах 1 и 2 выше).</li>
+                <li>Зарегистрируйтесь на <a href="https://vercel.com" target="_blank" rel="noopener noreferrer" className="text-accent-blue hover:underline">Vercel</a> с помощью вашего аккаунта GitHub.</li>
+                <li>Нажмите "Add New... → Project" и импортируйте ваш репозиторий с сайтом.</li>
+                <li>Vercel автоматически определит, что это статичный сайт (благодаря файлу `vercel.json` в архиве) и развернет его. Никаких настроек сборки не требуется.</li>
+                <li>Ваш сайт будет доступен по ссылке, которую предоставит Vercel.</li>
+            </ol>
+        </div>
+
 
         <div className="mt-8 pt-6 border-t border-dark-border">
           <h4 className="font-semibold text-center text-dark-text-primary mb-2">Как вносить изменения в будущем?</h4>
