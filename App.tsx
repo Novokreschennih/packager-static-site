@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { AppFile } from './types';
-import { suggestFileName } from './services/geminiService';
+import { suggestFileName, generateConfigFromHtml } from './services/geminiService';
 import FileThumbnail from './components/FileThumbnail';
 import InstructionsModal from './components/InstructionsModal';
 import { UploadIcon, SparklesIcon, DownloadIcon, SpinnerIcon, CogIcon } from './components/Icons';
@@ -45,7 +45,7 @@ const App: React.FC = () => {
     const [files, setFiles] = useState<AppFile[]>([]);
     const [allUploadedFiles, setAllUploadedFiles] = useState<Map<string, StoredFile>>(new Map());
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState<false | 'optimizing' | 'zipping'>(false);
+    const [isLoading, setIsLoading] = useState<false | 'optimizing' | 'zipping' | 'generatingConfig'>(false);
     const [error, setError] = useState<string | null>(null);
     const [isInstructionsVisible, setIsInstructionsVisible] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -178,6 +178,51 @@ const App: React.FC = () => {
         }
     };
 
+    const handleGenerateConfig = async () => {
+        setIsLoading('generatingConfig');
+        setError(null);
+    
+        const allHtmlContent = files.map(f => f.content).join('\n\n---\n\n');
+    
+        try {
+            const configJsonString = await generateConfigFromHtml(allHtmlContent);
+            const newConfig = JSON.parse(configJsonString);
+            const prettyJson = JSON.stringify(newConfig, null, 2);
+    
+            setConfig(newConfig);
+            setConfigString(prettyJson);
+            setConfigError(null);
+    
+            // Update previews with the newly generated config
+            setFiles(currentFiles => {
+                currentFiles.forEach(f => URL.revokeObjectURL(f.objectURL));
+                return currentFiles.map(file => ({
+                    ...file,
+                    objectURL: createPreviewableObjectUrl(file.content, newConfig, allUploadedFiles)
+                }));
+            });
+    
+            // Add virtual _config.json to the file list for consistency
+            const newConfigFile: StoredFile = {
+                name: '_config.json',
+                content: prettyJson,
+                type: 'application/json'
+            };
+            setAllUploadedFiles(prevMap => {
+                const newMap = new Map(prevMap);
+                newMap.set('_config.json', newConfigFile);
+                return newMap;
+            });
+    
+        } catch (e) {
+            console.error("Failed to generate or parse config:", e);
+            setError("Не удалось сгенерировать файл конфигурации. Убедитесь, что в ваших HTML-файлах есть явные плейсхолдеры, или попробуйте снова.");
+            setConfigError("Ошибка генерации ИИ.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
     const handleSetIndex = useCallback((id: string) => {
         setFiles(prevFiles =>
@@ -255,6 +300,19 @@ const App: React.FC = () => {
 4.  **Посетите ваш опубликованный сайт!**
     *   Публикация сайта может занять несколько минут.
     *   Как только он будет опубликован, GitHub отобразит URL-адрес в верхней части экрана настроек "Pages". Он будет выглядеть примерно так: \`https://<ваш-логин>.github.io/<имя-вашего-репозитория>/\`
+
+---
+
+## Как вносить изменения
+
+Этот инструмент работает как "сборщик" — он подготавливает ваши файлы для публикации. GitHub Pages только отображает уже готовые файлы.
+
+**Важно:** Если вы захотите изменить какие-либо данные из вашего файла \`_config.json\` (например, поменять ссылки в соцсетях или ID счетчика аналитики), вы не сможете сделать это напрямую на GitHub.
+
+Вам нужно будет:
+1. Внести изменения в ваши файлы локально на компьютере.
+2. **Снова использовать этот инструмент**, чтобы заново собрать ваш сайт.
+3. Загрузить содержимое нового ZIP-архива на GitHub, **заменив старые файлы**.
 
 Вот и все! Ваш сайт теперь доступен в интернете.
 `;
@@ -350,10 +408,27 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {config !== null && (
+                        {config === null ? (
+                            <div className="bg-dark-panel border border-dark-border p-6 rounded-lg shadow-lg text-center">
+                                <h2 className="text-2xl font-semibold mb-2 flex items-center justify-center">
+                                    <CogIcon className="mr-3 h-6 w-6 text-dark-text-secondary"/> 2. (Опционально) Настройки сайта
+                                </h2>
+                                <p className="text-dark-text-secondary mb-6 max-w-xl mx-auto">
+                                    Файл <code className="bg-slate-900 text-xs px-1.5 py-1 rounded">_config.json</code> не найден. ИИ может проанализировать ваш HTML и создать его для вас.
+                                </p>
+                                <button
+                                    onClick={handleGenerateConfig}
+                                    disabled={isLoading === 'generatingConfig'}
+                                    className="inline-flex items-center justify-center px-5 py-3 border border-dark-border text-base font-medium rounded-md text-dark-text-primary bg-button-secondary hover:bg-button-secondary-hover transition-all disabled:opacity-50 disabled:cursor-wait"
+                                >
+                                    {isLoading === 'generatingConfig' ? <SpinnerIcon className="mr-2" /> : <SparklesIcon className="mr-2 h-5 w-5" />}
+                                    {isLoading === 'generatingConfig' ? 'Анализ...' : 'Сгенерировать конфиг с помощью ИИ'}
+                                </button>
+                            </div>
+                        ) : (
                             <div className="bg-dark-panel border border-dark-border p-6 rounded-lg shadow-lg">
                                 <h2 className="text-2xl font-semibold mb-2 flex items-center">
-                                    <CogIcon className="mr-3 h-6 w-6 text-dark-text-secondary"/> 1.5. Настройки сайта (<code className="text-lg">_config.json</code>)
+                                    <CogIcon className="mr-3 h-6 w-6 text-dark-text-secondary"/> 2. (Опционально) Настройки сайта (<code className="text-lg">_config.json</code>)
                                 </h2>
                                 <p className="text-dark-text-secondary mb-4">
                                     Редактируйте глобальные переменные, которые будут вставлены в ваши HTML-файлы. Используйте синтаксис <code>{"{{ ключ.вложенный_ключ }}"}</code>. Изменения применятся к превью мгновенно.
@@ -368,10 +443,11 @@ const App: React.FC = () => {
                             </div>
                         )}
 
+
                         <div className="bg-dark-panel border border-dark-border p-6 rounded-lg shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="flex-grow">
-                                <h2 className="text-2xl font-semibold">2. Финальные шаги</h2>
-                                <p className="text-dark-text-secondary mt-1">Оптимизируйте имена файлов и упакуйте все для GitHub.</p>
+                                <h2 className="text-2xl font-semibold">3. Финальные шаги</h2>
+                                <p className="text-dark-text-secondary mt-1">Оптимизируйте имена файлов (по желанию) и упакуйте все для GitHub.</p>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
                                 <button

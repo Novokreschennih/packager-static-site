@@ -99,6 +99,13 @@ const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, onClose }
           </div>
         </div>
 
+        <div className="mt-8 pt-6 border-t border-dark-border">
+          <h4 className="font-semibold text-center text-dark-text-primary mb-2">Как вносить изменения в будущем?</h4>
+          <p className="text-sm text-center text-dark-text-secondary">
+            Этот инструмент "собирает" ваш сайт. Если вы захотите обновить данные из <code className="bg-slate-900 text-xs px-1 py-0.5 rounded">_config.json</code>, вам нужно будет снова загрузить сюда файлы проекта, чтобы сгенерировать и выгрузить на GitHub новую версию сайта.
+          </p>
+        </div>
+
         <div className="mt-8 text-center">
           <button
             onClick={onClose}
