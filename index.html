@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-g" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Подготовщик сайта для GitHub Pages</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'dark-bg': '#111827', // slate-900
+              'dark-panel': '#1F2937', // slate-800
+              'dark-border': '#374151', // slate-700
+              'dark-text-primary': '#F3F4F6', // gray-100
+              'dark-text-secondary': '#9CA3AF', // gray-400
+              'accent-blue': '#4F46E5', // indigo-600
+              'accent-blue-hover': '#4338CA', // indigo-700
+              'button-secondary': '#374151', // slate-700
+              'button-secondary-hover': '#4B5563', // slate-600
+            },
+          },
+        },
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-dark-bg text-dark-text-primary">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
