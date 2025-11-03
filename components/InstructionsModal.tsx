@@ -69,10 +69,10 @@ const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, onClose }
           <div>
             <h3 className="text-lg font-semibold mb-2 flex items-center">
               <span className="bg-accent-blue text-white rounded-full h-8 w-8 flex items-center justify-center font-bold mr-3">2</span>
-              Загрузите ZIP-архив
+              Распакуйте и загрузите файлы
             </h3>
             <p className="pl-11 text-dark-text-secondary">
-              В вашем новом репозитории нажмите "Add file" → "Upload files". Просто **перетащите скачанный ZIP-файл** (`github-pages-site.zip`) в область загрузки. GitHub автоматически распакует его.
+              Сначала **распакуйте скачанный ZIP-архив** на вашем компьютере. Затем в репозитории нажмите "Add file" → "Upload files". **Перетащите все файлы и папки из распакованного архива** (не сам ZIP-файл!) в область загрузки.
             </p>
           </div>
 

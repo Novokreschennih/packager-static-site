@@ -1,10 +1,9 @@
-
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { AppFile } from './types';
 import { suggestFileName } from './services/geminiService';
 import FileThumbnail from './components/FileThumbnail';
 import InstructionsModal from './components/InstructionsModal';
-import { UploadIcon, SparklesIcon, DownloadIcon, SpinnerIcon } from './components/Icons';
+import { UploadIcon, SparklesIcon, DownloadIcon, SpinnerIcon, CogIcon } from './components/Icons';
 
 // This is required because we are loading JSZip from a CDN.
 declare const JSZip: any;
@@ -15,6 +14,33 @@ interface StoredFile {
     type: string;
 }
 
+// Helper to resolve nested keys from a string path (e.g., 'social.twitter')
+const getNestedValue = (obj: any, path: string): string | undefined => {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+};
+
+// Helper for replacing placeholders with config values
+const processHtmlWithConfig = (htmlContent: string, configData: Record<string, any> | null): string => {
+    if (!configData) return htmlContent;
+    return htmlContent.replace(/\{\{\s*([\w\d._-]+)\s*\}\}/g, (match, key) => {
+        const value = getNestedValue(configData, key);
+        if (value !== undefined && value !== null) {
+            return String(value);
+        }
+        console.warn(`[Config] Ключ "${key}" не найден в _config.json.`);
+        return ''; // Replace with empty string if not found
+    });
+};
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+};
+
 const App: React.FC = () => {
     const [files, setFiles] = useState<AppFile[]>([]);
     const [allUploadedFiles, setAllUploadedFiles] = useState<Map<string, StoredFile>>(new Map());
@@ -23,6 +49,48 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isInstructionsVisible, setIsInstructionsVisible] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    const [config, setConfig] = useState<Record<string, any> | null>(null);
+    const [configString, setConfigString] = useState('');
+    const [configError, setConfigError] = useState<string | null>(null);
+
+    // Creates a preview-ready object URL by templating and inlining assets
+    const createPreviewableObjectUrl = useCallback((
+        originalHtml: string,
+        currentConfig: Record<string, any> | null,
+        allFilesMap: Map<string, StoredFile>
+    ): string => {
+        const templatedHtml = processHtmlWithConfig(originalHtml, currentConfig);
+        const doc = new DOMParser().parseFromString(templatedHtml, 'text/html');
+
+        // Inline CSS
+        doc.querySelectorAll('link[rel="stylesheet"][href]').forEach(link => {
+            const href = link.getAttribute('href')!;
+            const fileName = href.split('/').pop()!;
+            if (!href.startsWith('http') && allFilesMap.has(fileName)) {
+                const cssFile = allFilesMap.get(fileName)!;
+                const style = doc.createElement('style');
+                style.textContent = cssFile.content as string;
+                link.replaceWith(style);
+            }
+        });
+
+        // Inline Images
+        doc.querySelectorAll('img[src]').forEach(img => {
+            const src = img.getAttribute('src')!;
+            const fileName = src.split('/').pop()!;
+            if (!src.startsWith('http') && !src.startsWith('data:') && allFilesMap.has(fileName)) {
+                const imgFile = allFilesMap.get(fileName)!;
+                if (imgFile.content instanceof ArrayBuffer) {
+                    const base64 = arrayBufferToBase64(imgFile.content);
+                    img.setAttribute('src', `data:${imgFile.type};base64,${base64}`);
+                }
+            }
+        });
+
+        const finalHtmlForPreview = doc.documentElement.outerHTML;
+        return URL.createObjectURL(new Blob([finalHtmlForPreview], { type: 'text/html' }));
+    }, []);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const uploadedFiles = event.target.files;
@@ -32,19 +100,16 @@ const App: React.FC = () => {
         setFiles([]);
         setSelectedId(null);
         setAllUploadedFiles(new Map());
+        setConfig(null);
+        setConfigString('');
+        setConfigError(null);
 
         const filePromises = Array.from(uploadedFiles).map(file => {
             return new Promise<StoredFile>((resolve, reject) => {
                 const reader = new FileReader();
-                const isText = file.type.startsWith('text/') || file.type.endsWith('javascript') || file.type === 'application/json';
-
-                reader.onload = () => resolve({
-                    name: file.name,
-                    content: reader.result!,
-                    type: file.type
-                });
+                const isText = file.type.startsWith('text/') || file.name.endsWith('.js') || file.name.endsWith('.json') || file.name.endsWith('.css');
+                reader.onload = () => resolve({ name: file.name, content: reader.result!, type: file.type });
                 reader.onerror = reject;
-
                 if (isText) reader.readAsText(file);
                 else reader.readAsArrayBuffer(file);
             });
@@ -54,55 +119,31 @@ const App: React.FC = () => {
             const allFilesMap = new Map(allFilesArray.map(f => [f.name, f]));
             setAllUploadedFiles(allFilesMap);
 
-            const htmlFiles = allFilesArray.filter(f => f.type === 'text/html');
+            let newConfig: Record<string, any> | null = null;
+            const configFile = allFilesArray.find(f => f.name === '_config.json');
+            if (configFile) {
+                try {
+                    newConfig = JSON.parse(configFile.content as string);
+                    setConfig(newConfig);
+                    setConfigString(JSON.stringify(newConfig, null, 2));
+                } catch (e) {
+                    setError("Ошибка в файле _config.json: неверный формат JSON.");
+                    setConfigString(configFile.content as string);
+                    setConfigError('Неверный формат JSON');
+                }
+            }
+
+            const htmlFiles = allFilesArray.filter(f => f.type === 'text/html' && f.name !== '_config.json');
 
             const appFiles: AppFile[] = htmlFiles.map(htmlFile => {
-                const doc = new DOMParser().parseFromString(htmlFile.content as string, 'text/html');
-
-                // Inline CSS
-                doc.querySelectorAll('link[rel="stylesheet"][href]').forEach(link => {
-                    const href = link.getAttribute('href')!;
-                    const fileName = href.split('/').pop()!;
-                    if (!href.startsWith('http') && allFilesMap.has(fileName)) {
-                        const cssFile = allFilesMap.get(fileName)!;
-                        const style = doc.createElement('style');
-                        style.textContent = cssFile.content as string;
-                        link.replaceWith(style);
-                    }
-                });
-
-                // Inline Images
-                const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-                    let binary = '';
-                    const bytes = new Uint8Array(buffer);
-                    const len = bytes.byteLength;
-                    for (let i = 0; i < len; i++) {
-                        binary += String.fromCharCode(bytes[i]);
-                    }
-                    return window.btoa(binary);
-                };
-
-                doc.querySelectorAll('img[src]').forEach(img => {
-                    const src = img.getAttribute('src')!;
-                    const fileName = src.split('/').pop()!;
-                    if (!src.startsWith('http') && !src.startsWith('data:') && allFilesMap.has(fileName)) {
-                        const imgFile = allFilesMap.get(fileName)!;
-                        if (imgFile.content instanceof ArrayBuffer) {
-                            const base64 = arrayBufferToBase64(imgFile.content);
-                            img.setAttribute('src', `data:${imgFile.type};base64,${base64}`);
-                        }
-                    }
-                });
-                
-                const finalHtml = doc.documentElement.outerHTML;
-                const objectURL = URL.createObjectURL(new Blob([finalHtml], { type: 'text/html' }));
+                const objectURL = createPreviewableObjectUrl(htmlFile.content as string, newConfig, allFilesMap);
                 const id = `${htmlFile.name}-${Date.now()}`;
 
                 return {
                     id,
                     originalName: htmlFile.name,
-                    content: htmlFile.content as string, // Store original content for zipping
-                    objectURL, // Use inlined version for preview
+                    content: htmlFile.content as string,
+                    objectURL,
                     newName: htmlFile.name,
                     isIndex: false,
                 };
@@ -117,6 +158,26 @@ const App: React.FC = () => {
             setError("Не удалось прочитать один или несколько файлов. Пожалуйста, попробуйте снова.");
         });
     };
+    
+    const handleConfigChange = (newConfigString: string) => {
+        setConfigString(newConfigString);
+        try {
+            const newConfig = JSON.parse(newConfigString);
+            setConfig(newConfig);
+            setConfigError(null);
+            // Update previews with new config
+            setFiles(currentFiles => {
+                 currentFiles.forEach(f => URL.revokeObjectURL(f.objectURL));
+                 return currentFiles.map(file => ({
+                     ...file,
+                     objectURL: createPreviewableObjectUrl(file.content, newConfig, allUploadedFiles)
+                 }));
+            });
+        } catch (e) {
+            setConfigError('Ошибка: неверный формат JSON.');
+        }
+    };
+
 
     const handleSetIndex = useCallback((id: string) => {
         setFiles(prevFiles =>
@@ -178,9 +239,10 @@ const App: React.FC = () => {
     *   Убедитесь, что репозиторий **Публичный**.
     *   Нажмите "Создать репозиторий".
 
-2.  **Загрузите ваши файлы:**
-    *   В вашем новом репозитории нажмите кнопку "Add file" и выберите "Upload files".
-    *   **Перетащите скачанный ZIP-файл** в область загрузки. GitHub автоматически распакует архив за вас.
+2.  **Распакуйте и загрузите файлы:**
+    *   **Распакуйте скачанный ZIP-архив** на вашем компьютере.
+    *   В вашем новом репозитории на GitHub нажмите "Add file" и выберите "Upload files".
+    *   **Перетащите все файлы и папки из распакованного архива** (не сам ZIP-файл!) в область загрузки.
     *   Подождите, пока файлы загрузятся, затем нажмите "Commit changes".
 
 3.  **Активируйте GitHub Pages:**
@@ -212,8 +274,17 @@ const App: React.FC = () => {
             const nameMap = new Map(files.map(f => [f.originalName, f.newName]));
             
             allUploadedFiles.forEach(file => {
+                if (file.name === '_config.json') return; // Do not include config file in final zip
+
                 const newName = nameMap.get(file.name) ?? file.name;
-                zip.file(newName, file.content);
+                
+                let finalContent = file.content;
+                // Process HTML files with config before zipping
+                if (file.type === 'text/html') {
+                    finalContent = processHtmlWithConfig(file.content as string, config);
+                }
+
+                zip.file(newName, finalContent);
             });
 
             zip.file("README.md", generateReadmeContent());
@@ -251,7 +322,7 @@ const App: React.FC = () => {
                 {files.length === 0 ? (
                     <div className="text-center max-w-md mx-auto p-8 border-2 border-dashed border-dark-border rounded-xl bg-dark-panel">
                         <h2 className="text-2xl font-semibold mb-4">Начните здесь</h2>
-                        <p className="text-dark-text-secondary mb-6">Загрузите все файлы вашего сайта (HTML, CSS, JS, изображения), чтобы начать.</p>
+                        <p className="text-dark-text-secondary mb-6">Загрузите все файлы вашего сайта (HTML, CSS, JS, изображения, и опционально <code className="bg-slate-900 text-xs px-1.5 py-1 rounded">_config.json</code>), чтобы начать.</p>
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-accent-blue hover:bg-accent-blue-hover transition-all transform hover:scale-105"
@@ -278,6 +349,24 @@ const App: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+
+                        {config !== null && (
+                            <div className="bg-dark-panel border border-dark-border p-6 rounded-lg shadow-lg">
+                                <h2 className="text-2xl font-semibold mb-2 flex items-center">
+                                    <CogIcon className="mr-3 h-6 w-6 text-dark-text-secondary"/> 1.5. Настройки сайта (<code className="text-lg">_config.json</code>)
+                                </h2>
+                                <p className="text-dark-text-secondary mb-4">
+                                    Редактируйте глобальные переменные, которые будут вставлены в ваши HTML-файлы. Используйте синтаксис <code>{"{{ ключ.вложенный_ключ }}"}</code>. Изменения применятся к превью мгновенно.
+                                </p>
+                                <textarea
+                                    value={configString}
+                                    onChange={(e) => handleConfigChange(e.target.value)}
+                                    className={`w-full h-48 p-4 font-mono text-sm bg-slate-900 border rounded-md focus:ring-accent-blue focus:border-accent-blue transition-colors ${configError ? 'border-red-500' : 'border-dark-border'}`}
+                                    spellCheck="false"
+                                />
+                                {configError && <p className="mt-2 text-sm text-red-400">{configError}</p>}
+                            </div>
+                        )}
 
                         <div className="bg-dark-panel border border-dark-border p-6 rounded-lg shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="flex-grow">
