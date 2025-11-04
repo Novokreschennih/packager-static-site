@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppFile } from '../types';
-import { StarIcon } from './Icons';
+import { StarIcon, ExpandIcon } from './Icons';
 
 interface FileThumbnailProps {
   file: AppFile;
@@ -9,14 +9,20 @@ interface FileThumbnailProps {
   onSelect: (id: string) => void;
   onSetIndex: (id: string) => void;
   onNameChange: (id: string, newName: string) => void;
+  onExpand: (url: string) => void;
 }
 
-const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, isHighlighted, onSelect, onSetIndex, onNameChange }) => {
+const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, isHighlighted, onSelect, onSetIndex, onNameChange, onExpand }) => {
   const handleSetIndexClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onSetIndex(file.id);
   };
   
+  const handleExpandClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onExpand(file.objectURL);
+  };
+
   return (
     <div className="flex flex-col space-y-2">
       <div
@@ -26,7 +32,7 @@ const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, isHighl
         } ${isHighlighted ? 'shadow-lg shadow-green-500/50' : ''}`}
       >
         {file.isIndex && (
-          <div className="absolute top-2 right-2 bg-yellow-500 text-white p-2 rounded-full z-10 shadow-lg">
+          <div className="absolute top-2 right-2 bg-yellow-500 text-white p-2 rounded-full z-20 shadow-lg">
             <StarIcon className="w-5 h-5" />
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
@@ -34,13 +40,23 @@ const FileThumbnail: React.FC<FileThumbnailProps> = ({ file, isSelected, isHighl
             </span>
           </div>
         )}
+
+        <button
+            onClick={handleExpandClick}
+            className="absolute top-2 left-2 z-20 p-2 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75 transition-colors duration-300"
+            aria-label="Развернуть на весь экран"
+            title="Развернуть на весь экран"
+        >
+            <ExpandIcon className="w-5 h-5" />
+        </button>
+
         <iframe
           src={file.objectURL}
           title={file.originalName}
-          className="w-full h-48 md:h-64 object-cover transform scale-100 group-hover:scale-105 transition-transform duration-300 pointer-events-none bg-white"
+          className="w-full h-48 md:h-64 bg-white"
           sandbox="allow-scripts" // Allow scripts for styling (e.g., Tailwind CDN)
         />
-        <div className="absolute inset-0 bg-black bg-opacity-20 group-hover:bg-opacity-0 transition-all duration-300" />
+        <div className="absolute inset-0 bg-black bg-opacity-10 pointer-events-none" />
 
         {isSelected && !file.isIndex && (
            <button

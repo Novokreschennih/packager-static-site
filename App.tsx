@@ -126,7 +126,8 @@ const App: React.FC = () => {
         setConfigString('');
         setConfigError(null);
 
-        const filePromises = Array.from(uploadedFiles).map(file => {
+        // Fix: Explicitly type 'file' as 'File' to resolve properties access errors.
+        const filePromises = Array.from(uploadedFiles).map((file: File) => {
             return new Promise<StoredFile>((resolve, reject) => {
                 const reader = new FileReader();
                 const isText = file.type.startsWith('text/') || file.name.endsWith('.js') || file.name.endsWith('.json') || file.name.endsWith('.css');

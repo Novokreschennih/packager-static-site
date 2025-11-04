@@ -4,6 +4,7 @@ import { suggestFileName, generateConfigFromHtml } from './services/geminiServic
 import FileThumbnail from './components/FileThumbnail';
 import InstructionsModal from './components/InstructionsModal';
 import ApiKeyModal from './components/ApiKeyModal';
+import FullscreenPreviewModal from './components/FullscreenPreviewModal';
 import { UploadIcon, SparklesIcon, DownloadIcon, SpinnerIcon, CogIcon } from './components/Icons';
 
 // This is required because we are loading JSZip from a CDN.
@@ -61,6 +62,7 @@ const App: React.FC = () => {
     const [apiKey, setApiKey] = useState<string | null>(null);
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [pendingAiAction, setPendingAiAction] = useState<(() => void) | null>(null);
+    const [fullscreenFileUrl, setFullscreenFileUrl] = useState<string | null>(null);
     
     useEffect(() => {
         const storedKey = localStorage.getItem('geminiApiKey');
@@ -135,7 +137,8 @@ const App: React.FC = () => {
         setConfigString('');
         setConfigError(null);
 
-        const filePromises = Array.from(uploadedFiles).map(file => {
+        // Fix: Explicitly type 'file' as 'File' to resolve properties access errors.
+        const filePromises = Array.from(uploadedFiles).map((file: File) => {
             return new Promise<StoredFile>((resolve, reject) => {
                 const reader = new FileReader();
                 const isText = file.type.startsWith('text/') || file.name.endsWith('.js') || file.name.endsWith('.json') || file.name.endsWith('.css');
@@ -507,6 +510,7 @@ const App: React.FC = () => {
                                         onSelect={setSelectedId}
                                         onSetIndex={handleSetIndex}
                                         onNameChange={handleNameChange}
+                                        onExpand={setFullscreenFileUrl}
                                     />
                                 ))}
                             </div>
@@ -599,6 +603,12 @@ const App: React.FC = () => {
               isOpen={isApiKeyModalOpen}
               onClose={() => setIsApiKeyModalOpen(false)}
               onSave={handleSaveApiKey}
+            />
+            
+            <FullscreenPreviewModal
+              isOpen={!!fullscreenFileUrl}
+              onClose={() => setFullscreenFileUrl(null)}
+              fileUrl={fullscreenFileUrl || ''}
             />
         </div>
     );
